@@ -28,15 +28,20 @@ local teamCheckEnabled = false
 local targetPart = "Head"
 local smoothing = 0
 local lockedTarget = nil
+
 local lineESPEnabled = false
-local lineTransparency = 1
 local headESPEnabled = false
-local headTransparency = 1
 local boxESPEnabled = false
+local healthESPEnabled = false
+
+local lineTransparency = 1
+local headTransparency = 1
 local boxTransparency = 1
+
 local lineESP = {}
 local headESP = {}
 local boxESP = {}
+local healthESP = {}
 
 Aimingsec1:Toggle {
     Name = "Enabled",
@@ -168,6 +173,22 @@ Visualssec1:Slider {
     end
 }
 
+Visualssec1:Toggle {
+    Name = "Health ESP",
+    flag = "healthESP",
+    callback = function(bool)
+        healthESPEnabled = bool
+        if not healthESPEnabled then
+            for _, text in pairs(healthESP) do
+                if text then
+                    text:Remove()
+                end
+            end
+            healthESP = {}
+        end
+    end
+}
+
 MiscSec:Button {
     Name = "Unload UI",
     callback = function()
@@ -178,6 +199,7 @@ MiscSec:Button {
         lineESPEnabled = false
         headESPEnabled = false
         boxESPEnabled = false
+        healthESPEnabled = false
 
         for _, esp in pairs(lineESP) do
             if esp then
@@ -194,10 +216,16 @@ MiscSec:Button {
                 esp:Remove()
             end
         end
+        for _, esp in pairs(healthESP) do
+            if esp then
+                esp:Remove()
+            end
+        end
 
         lineESP = {}
         headESP = {}
         boxESP = {}
+        healthESP = {}
 
         aimingEnabled = false
         teamCheckEnabled = false
@@ -218,6 +246,10 @@ players.PlayerRemoving:Connect(function(player)
     if boxESP[player] then
         boxESP[player]:Remove()
         boxESP[player] = nil
+    end
+    if healthESP[player] then
+        healthESP[player]:Remove()
+        healthESP[player] = nil
     end
 end)
 
@@ -255,13 +287,11 @@ runService.Heartbeat:Connect(function()
 
                     if onScreen then
                         if boxESP[player] and boxESP[player].Visible then
-                            -- If Box ESP is enabled, draw the line to the center bottom of the box
                             local box = boxESP[player]
                             local boxBottomCenter = Vector2.new(box.Position.X + box.Size.X / 2, box.Position.Y + box.Size.Y)
                             line.From = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
                             line.To = boxBottomCenter
                         else
-                            -- If Box ESP is off, draw the line to the head
                             line.From = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
                             line.To = Vector2.new(screenPos.X, screenPos.Y)
                         end
@@ -372,6 +402,67 @@ runService.Heartbeat:Connect(function()
         end
     end
 
+    -- Health ESP
+    if healthESPEnabled then
+        for _, player in pairs(players:GetPlayers()) do
+            if player ~= localPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                if teamCheckEnabled and player.Team == localPlayer.Team then
+                    if healthESP[player] then
+                        healthESP[player].Visible = false
+                    end
+                    continue
+                end
+
+                if not healthESP[player] then
+                    local text = Drawing.new("Text")
+                    text.Size = 12
+                    text.Color = Color3.fromRGB(0, 255, 0)
+                    text.Transparency = 1
+                    text.Outline = true
+                    healthESP[player] = text
+                end
+
+                local humanoid = player.Character:FindFirstChild("Humanoid")
+                local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+                if humanoid and humanoidRootPart then
+                    local torsoPos = humanoidRootPart.Position
+                    local screenPos, onScreen = camera:WorldToViewportPoint(torsoPos)
+                    local health = math.clamp(humanoid.Health, 0, humanoid.MaxHealth)
+                    local text = healthESP[player]
+
+                    if onScreen then
+                        if boxESPEnabled and boxESP[player] and boxESP[player].Visible then
+                            local box = boxESP[player]
+                            text.Position = Vector2.new(
+                                box.Position.X + box.Size.X + 5,
+                                box.Position.Y
+                            )
+                        else
+                            local textWidth = text.TextBounds.X
+                            local textHeight = text.TextBounds.Y
+                            text.Position = Vector2.new(
+                                screenPos.X - (textWidth / 2), 
+                                screenPos.Y - (textHeight / 2) 
+                            )
+                        end
+
+                        text.Text = string.format("HP: %d", health)
+                        text.Visible = true
+                    else
+                        text.Visible = false
+                    end
+                else
+                    if healthESP[player] then
+                        healthESP[player]:Remove()
+                        healthESP[player] = nil
+                    end
+                end
+            elseif healthESP[player] then
+                healthESP[player]:Remove()
+                healthESP[player] = nil
+            end
+        end
+    end
 
     -- Aiming
     if holdingRMB and lockedTarget then
